@@ -1,0 +1,906 @@
+<!DOCTYPE html>
+<html lang="ja" class="h-full bg-slate-100">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart POS Cloud - Firebase & GitHub Pages Ready</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts (Inter & Noto Sans JP) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#f0f9ff',
+                            100: '#e0f2fe',
+                            500: '#0ea5e9',
+                            600: '#0284c7',
+                            700: '#0369a1',
+                            800: '#075985',
+                            900: '#0c4a6e',
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'Noto Sans JP', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* カスタムスクロールバーと印刷設定 */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #f1f5f9; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 9999px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+        .receipt-paper {
+            background: #ffffff;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+            position: relative;
+        }
+        .receipt-paper::after {
+            content: "";
+            position: absolute;
+            bottom: -8px;
+            left: 0;
+            right: 0;
+            height: 8px;
+            background: linear-gradient(-45deg, transparent 4px, #fff 0), linear-gradient(45deg, transparent 4px, #fff 0);
+            background-repeat: repeat-x;
+            background-size: 8px 8px;
+        }
+
+        @media print {
+            body * { visibility: hidden; }
+            #printable-receipt, #printable-receipt * { visibility: visible; }
+            #printable-receipt {
+                position: absolute;
+                left: 0;
+                top: 0;
+                width: 100%;
+                margin: 0;
+                padding: 0;
+                box-shadow: none;
+            }
+            .no-print { display: none !important; }
+        }
+    </style>
+</head>
+<body class="h-full font-sans text-slate-800 flex flex-col overflow-hidden bg-slate-100">
+
+    <!-- ヘッダーナビゲーション -->
+    <header class="bg-slate-900 text-white shadow-md z-30 flex-shrink-0 border-b border-slate-800">
+        <div class="max-w-7xl mx-auto px-4 py-2.5 flex items-center justify-between">
+            <!-- App Logo & Title -->
+            <div class="flex items-center space-x-3">
+                <div class="bg-gradient-to-tr from-brand-600 to-cyan-400 text-white p-2.5 rounded-xl shadow-lg shadow-brand-500/20 flex items-center justify-center">
+                    <i class="fa-solid fa-cash-register text-xl"></i>
+                </div>
+                <div>
+                    <div class="flex items-center space-x-2">
+                        <h1 class="font-extrabold text-lg tracking-tight leading-none bg-clip-text text-transparent bg-gradient-to-r from-white to-slate-300">SmartPOS Cloud</h1>
+                        <span id="sync-status-badge" class="bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-[10px] px-2 py-0.5 rounded-full font-medium flex items-center gap-1">
+                            <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                            <span id="sync-status-text">オンライン</span>
+                        </span>
+                    </div>
+                    <p class="text-[11px] text-slate-400 mt-0.5">Firebase POS リアルタイム管理システム</p>
+                </div>
+            </div>
+
+            <!-- Desktop Navigation Tabs -->
+            <nav class="hidden md:flex items-center space-x-1 bg-slate-800/90 p-1 rounded-xl border border-slate-700/60 shadow-inner">
+                <button onclick="switchTab('pos')" id="tab-btn-pos" class="px-4 py-2 rounded-lg text-xs font-semibold transition-all flex items-center space-x-2 bg-brand-600 text-white shadow">
+                    <i class="fa-solid fa-calculator"></i>
+                    <span>レジ会計</span>
+                </button>
+                <button onclick="switchTab('products')" id="tab-btn-products" class="px-4 py-2 rounded-lg text-xs font-semibold text-slate-300 hover:text-white hover:bg-slate-700/60 transition-all flex items-center space-x-2">
+                    <i class="fa-solid fa-boxes-stacked"></i>
+                    <span>商品マスター</span>
+                </button>
+                <button onclick="switchTab('sales')" id="tab-btn-sales" class="px-4 py-2 rounded-lg text-xs font-semibold text-slate-300 hover:text-white hover:bg-slate-700/60 transition-all flex items-center space-x-2">
+                    <i class="fa-solid fa-chart-line"></i>
+                    <span>売上・レポート</span>
+                </button>
+                <button onclick="switchTab('guide')" id="tab-btn-guide" class="px-4 py-2 rounded-lg text-xs font-semibold text-slate-300 hover:text-white hover:bg-slate-700/60 transition-all flex items-center space-x-2">
+                    <i class="fa-solid fa-book"></i>
+                    <span>GitHub/Firebase設定</span>
+                </button>
+            </nav>
+
+            <!-- User Status & Config Options -->
+            <div class="flex items-center space-x-3">
+                <button onclick="openConfigModal()" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg transition text-xs font-medium flex items-center space-x-1.5 border border-slate-700">
+                    <i class="fa-solid fa-database text-brand-400"></i>
+                    <span>データ保存設定</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Mobile Bottom Nav Bar -->
+        <div class="md:hidden flex border-t border-slate-800 bg-slate-900/95 justify-around py-1.5 text-[11px] font-medium text-slate-400">
+            <button onclick="switchTab('pos')" id="mob-tab-pos" class="flex flex-col items-center py-1 px-3 text-brand-400">
+                <i class="fa-solid fa-calculator text-base mb-0.5"></i>
+                <span>レジ</span>
+            </button>
+            <button onclick="switchTab('products')" id="mob-tab-products" class="flex flex-col items-center py-1 px-3">
+                <i class="fa-solid fa-boxes-stacked text-base mb-0.5"></i>
+                <span>商品</span>
+            </button>
+            <button onclick="switchTab('sales')" id="mob-tab-sales" class="flex flex-col items-center py-1 px-3">
+                <i class="fa-solid fa-chart-line text-base mb-0.5"></i>
+                <span>売上</span>
+            </button>
+            <button onclick="switchTab('guide')" id="mob-tab-guide" class="flex flex-col items-center py-1 px-3">
+                <i class="fa-solid fa-book text-base mb-0.5"></i>
+                <span>設定</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- メインコンテンツ表示エリア -->
+    <main class="flex-1 overflow-hidden relative">
+
+        <!-- VIEW 1: POS レジ会計画面 -->
+        <div id="view-pos" class="h-full flex flex-col lg:flex-row overflow-hidden">
+            <!-- 左側: 商品カタログ・検索エリア -->
+            <div class="flex-1 flex flex-col h-full border-r border-slate-200 bg-slate-50/70 overflow-hidden">
+                <!-- 検索・フィルターバー -->
+                <div class="p-3.5 bg-white border-b border-slate-200 space-y-2.5 flex-shrink-0 shadow-sm">
+                    <div class="relative">
+                        <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
+                        <input type="text" id="pos-search-input" oninput="renderPosProducts()" placeholder="商品名や検索キーワードを入力..." class="w-full pl-9 pr-4 py-2 bg-slate-100 rounded-xl text-xs border-none focus:ring-2 focus:ring-brand-500 font-medium text-slate-800 outline-none">
+                    </div>
+                    <!-- カテゴリタブ -->
+                    <div id="pos-category-pills" class="flex items-center space-x-1.5 overflow-x-auto pb-0.5 no-scrollbar">
+                        <!-- JSで動的に追加されます -->
+                    </div>
+                </div>
+
+                <!-- 商品グリッド一覧 -->
+                <div class="flex-1 p-3.5 overflow-y-auto">
+                    <div id="pos-product-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+                        <!-- JSで動的に追加されます -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- 右側: アクティブ伝票・カートエリア -->
+            <div class="w-full lg:w-[380px] xl:w-[420px] bg-white flex flex-col h-1/2 lg:h-full border-t lg:border-t-0 border-slate-200 shadow-xl flex-shrink-0">
+                <!-- カートヘッダー -->
+                <div class="p-3.5 border-b border-slate-200 flex items-center justify-between bg-slate-50/80">
+                    <div class="flex items-center space-x-2">
+                        <i class="fa-solid fa-receipt text-brand-600"></i>
+                        <h2 class="font-bold text-slate-800 text-sm">注文伝票</h2>
+                        <span id="cart-item-badge" class="bg-brand-100 text-brand-700 text-[11px] font-bold px-2 py-0.5 rounded-full">0 点</span>
+                    </div>
+                    <button onclick="clearCart()" class="text-xs text-rose-500 hover:text-rose-700 hover:bg-rose-50 px-2 py-1 rounded-lg transition flex items-center space-x-1">
+                        <i class="fa-solid fa-trash-arrow-up"></i>
+                        <span>全消去</span>
+                    </button>
+                </div>
+
+                <!-- カート商品リスト -->
+                <div id="cart-items-container" class="flex-1 overflow-y-auto p-3 divide-y divide-slate-100">
+                    <!-- JSで動的にカート内容が入ります -->
+                </div>
+
+                <!-- 割引・税率オプションパネル -->
+                <div class="px-4 py-2.5 bg-slate-50 border-t border-slate-200 space-y-2 text-xs">
+                    <div class="flex items-center justify-between">
+                        <span class="font-medium text-slate-600">値引き・割引:</span>
+                        <div class="flex items-center space-x-1">
+                            <input type="number" id="cart-discount-value" onchange="updateCartTotals()" min="0" placeholder="0" class="w-16 px-2 py-1 bg-white border border-slate-300 rounded text-right text-xs">
+                            <select id="cart-discount-type" onchange="updateCartTotals()" class="bg-white border border-slate-300 rounded px-1.5 py-1 text-xs">
+                                <option value="percent">% OFF</option>
+                                <option value="fixed">円 引</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 小計・税額・お会計確定エリア -->
+                <div class="p-4 bg-slate-900 text-white space-y-3 flex-shrink-0 shadow-inner">
+                    <div class="space-y-1 text-xs text-slate-300">
+                        <div class="flex justify-between">
+                            <span>小計 (税抜)</span>
+                            <span id="cart-subtotal" class="font-mono font-medium text-slate-200">¥0</span>
+                        </div>
+                        <div class="flex justify-between text-slate-400">
+                            <span>消費税 (10% / 8% 内訳可)</span>
+                            <span id="cart-tax" class="font-mono font-medium text-slate-300">¥0</span>
+                        </div>
+                        <div id="cart-discount-row" class="hidden flex justify-between text-amber-400 font-medium">
+                            <span>値引き額</span>
+                            <span id="cart-discount-amount" class="font-mono">-¥0</span>
+                        </div>
+                        <div class="border-t border-slate-800 pt-2 flex justify-between items-baseline">
+                            <span class="font-bold text-sm text-white">合計 (税込)</span>
+                            <span id="cart-grand-total" class="font-mono font-extrabold text-2xl text-emerald-400 tracking-tight">¥0</span>
+                        </div>
+                    </div>
+
+                    <button id="checkout-start-btn" onclick="openCheckoutModal()" disabled class="w-full bg-emerald-500 hover:bg-emerald-600 disabled:bg-slate-800 disabled:text-slate-600 text-white font-bold py-3.5 rounded-xl text-base shadow-lg shadow-emerald-500/20 transition flex items-center justify-center space-x-2">
+                        <i class="fa-solid fa-credit-card"></i>
+                        <span>お支払いへ進む</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- VIEW 2: 商品マスター管理画面 -->
+        <div id="view-products" class="hidden h-full flex-col bg-slate-50 overflow-y-auto p-4 md:p-6">
+            <div class="max-w-6xl mx-auto w-full space-y-5">
+                <!-- タイトル・追加アクション -->
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div>
+                        <h2 class="text-xl font-bold text-slate-800 flex items-center space-x-2">
+                            <i class="fa-solid fa-boxes-stacked text-brand-600"></i>
+                            <span>商品マスター管理</span>
+                        </h2>
+                        <p class="text-xs text-slate-500 mt-0.5">商品登録、価格設定、在庫数、カテゴリを管理します。</p>
+                    </div>
+                    <button onclick="openProductModal()" class="bg-brand-600 hover:bg-brand-700 text-white px-4 py-2.5 rounded-xl text-xs font-bold shadow transition flex items-center space-x-2 self-start sm:self-auto">
+                        <i class="fa-solid fa-plus"></i>
+                        <span>新規商品を登録</span>
+                    </button>
+                </div>
+
+                <!-- 商品管理テーブル -->
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse">
+                            <thead>
+                                <tr class="bg-slate-100/80 border-b border-slate-200 text-slate-600 text-[11px] font-bold uppercase tracking-wider">
+                                    <th class="p-3.5">商品名 / アイコン</th>
+                                    <th class="p-3.5">カテゴリ</th>
+                                    <th class="p-3.5">販売価格 (税込)</th>
+                                    <th class="p-3.5">適用税率</th>
+                                    <th class="p-3.5">在庫数</th>
+                                    <th class="p-3.5 text-right">操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="products-table-body" class="divide-y divide-slate-100 text-xs text-slate-700">
+                                <!-- JSで動的描画 -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- VIEW 3: 売上履歴 & ダッシュボード画面 -->
+        <div id="view-sales" class="hidden h-full flex-col bg-slate-50 overflow-y-auto p-4 md:p-6">
+            <div class="max-w-6xl mx-auto w-full space-y-5">
+                <!-- ヘッダーとCSV出力ボタン -->
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div>
+                        <h2 class="text-xl font-bold text-slate-800 flex items-center space-x-2">
+                            <i class="fa-solid fa-chart-line text-emerald-600"></i>
+                            <span>売上履歴・レポート</span>
+                        </h2>
+                        <p class="text-xs text-slate-500 mt-0.5">即時記録された取引履歴とサマリー分析です。</p>
+                    </div>
+                    <div class="flex items-center space-x-2 self-start sm:self-auto">
+                        <button onclick="clearSalesData()" class="bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 px-3 py-2.5 rounded-xl text-xs font-bold transition flex items-center space-x-1.5">
+                            <i class="fa-solid fa-trash-can"></i>
+                            <span>履歴クリア</span>
+                        </button>
+                        <button onclick="exportSalesCSV()" class="bg-slate-800 hover:bg-slate-700 text-white px-4 py-2.5 rounded-xl text-xs font-bold shadow transition flex items-center space-x-2">
+                            <i class="fa-solid fa-file-csv text-emerald-400"></i>
+                            <span>売上CSVを出力</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- KPI指標カード -->
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center space-x-3.5">
+                        <div class="p-3 bg-emerald-100 text-emerald-600 rounded-xl">
+                            <i class="fa-solid fa-yen-sign text-xl"></i>
+                        </div>
+                        <div>
+                            <p class="text-[11px] font-semibold text-slate-400">総売上高 (全期間)</p>
+                            <h3 id="sales-kpi-total" class="text-xl font-extrabold text-slate-800 font-mono mt-0.5">¥0</h3>
+                        </div>
+                    </div>
+                    <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center space-x-3.5">
+                        <div class="p-3 bg-brand-100 text-brand-600 rounded-xl">
+                            <i class="fa-solid fa-receipt text-xl"></i>
+                        </div>
+                        <div>
+                            <p class="text-[11px] font-semibold text-slate-400">総決済件数</p>
+                            <h3 id="sales-kpi-count" class="text-xl font-extrabold text-slate-800 font-mono mt-0.5">0 件</h3>
+                        </div>
+                    </div>
+                    <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center space-x-3.5">
+                        <div class="p-3 bg-purple-100 text-purple-600 rounded-xl">
+                            <i class="fa-solid fa-calculator text-xl"></i>
+                        </div>
+                        <div>
+                            <p class="text-[11px] font-semibold text-slate-400">平均客単価</p>
+                            <h3 id="sales-kpi-avg" class="text-xl font-extrabold text-slate-800 font-mono mt-0.5">¥0</h3>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 売上取引履歴テーブル -->
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                    <div class="p-3.5 border-b border-slate-100 bg-slate-50/80 flex items-center justify-between">
+                        <h3 class="font-bold text-slate-700 text-xs">最近の決済トランザクション</h3>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse">
+                            <thead>
+                                <tr class="bg-slate-100/80 border-b border-slate-200 text-slate-600 text-[11px] font-bold uppercase tracking-wider">
+                                    <th class="p-3.5">決済日時</th>
+                                    <th class="p-3.5">取引ID</th>
+                                    <th class="p-3.5">支払方法</th>
+                                    <th class="p-3.5">点数・内訳</th>
+                                    <th class="p-3.5">合計金額</th>
+                                    <th class="p-3.5">担当レジ員</th>
+                                    <th class="p-3.5 text-right">詳細</th>
+                                </tr>
+                            </thead>
+                            <tbody id="sales-table-body" class="divide-y divide-slate-100 text-xs text-slate-700">
+                                <!-- JSで動的描画 -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- VIEW 4: GitHub Pages & Firebase 設定ガイド -->
+        <div id="view-guide" class="hidden h-full flex-col bg-slate-50 overflow-y-auto p-4 md:p-6">
+            <div class="max-w-4xl mx-auto w-full space-y-6">
+                <div>
+                    <h2 class="text-xl font-bold text-slate-800 flex items-center space-x-2">
+                        <i class="fa-solid fa-book text-brand-600"></i>
+                        <span>GitHub Pages 公開 & Firebase 設定ガイド</span>
+                    </h2>
+                    <p class="text-xs text-slate-500 mt-1">このWebレジアプリを自分のGitHubアカウントで公開し、Firebaseと連携させる手順です。</p>
+                </div>
+
+                <!-- 手順ステップカード -->
+                <div class="space-y-4 text-xs">
+                    <!-- Step 1 -->
+                    <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-2">
+                        <div class="flex items-center space-x-2 text-brand-600 font-bold text-sm">
+                            <span class="w-6 h-6 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-xs">1</span>
+                            <h3>Firebase プロジェクトの準備とGoogleログイン有効化</h3>
+                        </div>
+                        <ol class="list-decimal list-inside text-slate-600 space-y-1.5 pl-2 leading-relaxed">
+                            <li><a href="https://console.firebase.google.com/" target="_blank" class="text-brand-600 underline font-semibold">Firebase Console</a> にアクセスし、プロジェクトを新規作成します。</li>
+                            <li>「Authentication」>「Sign-in method」を開き、<strong>Google</strong> ログインプロバイダを「有効」にします。</li>
+                            <li>「Firestore Database」を作成し、テストモードでデータベースを開始します。</li>
+                            <li>プロジェクト設定（歯車アイコン）から「ウェブアプリを追加」し、発行された <code class="bg-slate-100 text-rose-600 px-1 py-0.5 rounded font-mono">firebaseConfig</code> のJavaScriptオブジェクトをコピーします。</li>
+                        </ol>
+                    </div>
+
+                    <!-- Step 2 -->
+                    <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-2">
+                        <div class="flex items-center space-x-2 text-brand-600 font-bold text-sm">
+                            <span class="w-6 h-6 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-xs">2</span>
+                            <h3>GitHub Pages に無料公開</h3>
+                        </div>
+                        <ol class="list-decimal list-inside text-slate-600 space-y-1.5 pl-2 leading-relaxed">
+                            <li>GitHubで新しいリポジトリ（例: <code class="bg-slate-100 text-slate-800 px-1 py-0.5 rounded font-mono">my-smart-pos</code>）を作成します。</li>
+                            <li>このコード（<code class="bg-slate-100 text-slate-800 px-1 py-0.5 rounded font-mono">index.html</code>）をリポジトリのメインブランチ（main）にアップロードします。</li>
+                            <li>GitHubリポジトリの「Settings」>「Pages」を開きます。</li>
+                            <li>Source を「Deploy from a branch」にし、Branch を <code class="bg-slate-100 text-slate-800 px-1 py-0.5 rounded font-mono">main / root</code> に指定して Save します。</li>
+                            <li>数分後、<code class="bg-slate-100 text-brand-600 px-1 py-0.5 rounded font-mono">https://ユーザー名.github.io/my-smart-pos/</code> で公開されます。</li>
+                        </ol>
+                    </div>
+
+                    <!-- Step 3 -->
+                    <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-2">
+                        <div class="flex items-center space-x-2 text-brand-600 font-bold text-sm">
+                            <span class="w-6 h-6 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-xs">3</span>
+                            <h3>GitHub Pages ドメインの認証ドメイン追加 (必須)</h3>
+                        </div>
+                        <p class="text-slate-600 leading-relaxed">
+                            GoogleログインをGitHub Pages上で正しく動作させるため、Firebase Consoleの
+                            <code class="bg-slate-100 text-slate-800 px-1.5 py-0.5 rounded font-mono">Authentication > Settings > 承認済みドメイン (Authorized domains)</code> に、
+                            お使いのGitHubドメイン（例: <code class="bg-slate-100 text-emerald-600 px-1.5 py-0.5 rounded font-mono">ユーザー名.github.io</code>）を追加登録してください。
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- MODAL 1: お会計テンキー 決済モーダル -->
+    <div id="checkout-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl shadow-2xl max-w-md w-full overflow-hidden flex flex-col">
+            <div class="bg-slate-900 text-white p-4.5 flex items-center justify-between">
+                <div class="flex items-center space-x-2">
+                    <i class="fa-solid fa-cash-register text-emerald-400 text-lg"></i>
+                    <h3 class="font-bold text-base">お支払い決済</h3>
+                </div>
+                <button onclick="closeCheckoutModal()" class="text-slate-400 hover:text-white text-lg">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <div class="p-5 space-y-4">
+                <!-- 支払方法選択 -->
+                <div>
+                    <label class="block text-[11px] font-bold text-slate-500 uppercase mb-1.5">お支払い方法</label>
+                    <div class="grid grid-cols-3 gap-2">
+                        <button type="button" onclick="setPaymentMethod('cash')" id="pay-method-cash" class="py-2 px-3 rounded-xl border-2 border-brand-500 bg-brand-50 text-brand-700 font-bold text-xs flex flex-col items-center justify-center space-y-1">
+                            <i class="fa-solid fa-money-bill-wave text-base"></i>
+                            <span>現金</span>
+                        </button>
+                        <button type="button" onclick="setPaymentMethod('card')" id="pay-method-card" class="py-2 px-3 rounded-xl border border-slate-200 bg-white text-slate-600 font-medium text-xs flex flex-col items-center justify-center space-y-1">
+                            <i class="fa-solid fa-credit-card text-base"></i>
+                            <span>カード</span>
+                        </button>
+                        <button type="button" onclick="setPaymentMethod('qr')" id="pay-method-qr" class="py-2 px-3 rounded-xl border border-slate-200 bg-white text-slate-600 font-medium text-xs flex flex-col items-center justify-center space-y-1">
+                            <i class="fa-solid fa-qrcode text-base"></i>
+                            <span>QR決済</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- ご請求金額表示 -->
+                <div class="bg-slate-100 p-3.5 rounded-2xl border border-slate-200 text-center">
+                    <span class="text-[11px] font-semibold text-slate-500">お支払い合計額</span>
+                    <div id="modal-checkout-grandtotal" class="text-2xl font-extrabold text-slate-900 font-mono mt-0.5">¥0</div>
+                </div>
+
+                <!-- 現金テンキー入力セクション -->
+                <div id="cash-input-section" class="space-y-3">
+                    <div class="space-y-1">
+                        <label class="block text-[11px] font-semibold text-slate-600">お預かり金額</label>
+                        <div class="relative">
+                            <span class="absolute left-3.5 top-1/2 -translate-y-1/2 font-bold text-slate-400 text-lg">¥</span>
+                            <input type="text" id="modal-tendered-amount" readonly class="w-full text-right text-xl font-mono font-bold pl-8 pr-4 py-2 bg-slate-50 rounded-xl border border-slate-300 text-slate-800" value="0">
+                        </div>
+                    </div>
+
+                    <!-- クイックお札支払いボタン -->
+                    <div class="grid grid-cols-4 gap-1.5">
+                        <button onclick="addQuickMoney(1000)" class="py-1.5 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800 rounded-lg text-xs font-bold font-mono transition">¥1,000</button>
+                        <button onclick="addQuickMoney(5000)" class="py-1.5 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800 rounded-lg text-xs font-bold font-mono transition">¥5,000</button>
+                        <button onclick="addQuickMoney(10000)" class="py-1.5 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800 rounded-lg text-xs font-bold font-mono transition">¥10,000</button>
+                        <button onclick="setExactTendered()" class="py-1.5 bg-brand-50 hover:bg-brand-100 border border-brand-200 text-brand-800 rounded-lg text-xs font-bold transition">ぴったり</button>
+                    </div>
+
+                    <!-- お釣り金額 -->
+                    <div class="flex items-center justify-between p-3 bg-emerald-50 rounded-xl border border-emerald-200 text-emerald-900">
+                        <span class="font-bold text-xs">お釣り</span>
+                        <span id="modal-change-amount" class="text-xl font-extrabold font-mono text-emerald-600">¥0</span>
+                    </div>
+
+                    <!-- テンキー -->
+                    <div class="grid grid-cols-3 gap-1.5 pt-1">
+                        <button onclick="pressNumpad('1')" class="py-2.5 bg-slate-100 hover:bg-slate-200 rounded-xl text-base font-bold text-slate-800 shadow-sm active:scale-95 transition">1</button>
+                        <button onclick="pressNumpad('2')" class="py-2.5 bg-slate-100 hover:bg-slate-200 rounded-xl text-base font-bold text-slate-800 shadow-sm active:scale-95 transition">2</button>
+                        <button onclick="pressNumpad('3')" class="py-2.5 bg-slate-100 hover:bg-slate-200 rounded-xl text-base font-bold text-slate-800 shadow-sm active:scale-95 transition">3</button>
+                        <button onclick="pressNumpad('4')" class="py-2.5 bg-slate-100 hover:bg-slate-200 rounded-xl text-base font-bold text-slate-800 shadow-sm active:scale-95 transition">4</button>
+                        <button onclick="pressNumpad('5')" class="py-2.5 bg-slate-100 hover:bg-slate-200 rounded-xl text-base font-bold text-slate-800 shadow-sm active:scale-95 transition">5</button>
+                        <button onclick="pressNumpad('6')" class="py-2.5 bg-slate-100 hover:bg-slate-200 rounded-xl text-base font-bold text-slate-800 shadow-sm active:scale-95 transition">6</button>
+                        <button onclick="pressNumpad('7')" class="py-2.5 bg-slate-100 hover:bg-slate-200 rounded-xl text-base font-bold text-slate-800 shadow-sm active:scale-95 transition">7</button>
+                        <button onclick="pressNumpad('8')" class="py-2.5 bg-slate-100 hover:bg-slate-200 rounded-xl text-base font-bold text-slate-800 shadow-sm active:scale-95 transition">8</button>
+                        <button onclick="pressNumpad('9')" class="py-2.5 bg-slate-100 hover:bg-slate-200 rounded-xl text-base font-bold text-slate-800 shadow-sm active:scale-95 transition">9</button>
+                        <button onclick="pressNumpad('00')" class="py-2.5 bg-slate-100 hover:bg-slate-200 rounded-xl text-base font-bold text-slate-800 shadow-sm active:scale-95 transition">00</button>
+                        <button onclick="pressNumpad('0')" class="py-2.5 bg-slate-100 hover:bg-slate-200 rounded-xl text-base font-bold text-slate-800 shadow-sm active:scale-95 transition">0</button>
+                        <button onclick="pressNumpad('CLR')" class="py-2.5 bg-rose-100 hover:bg-rose-200 text-rose-700 rounded-xl text-xs font-bold shadow-sm active:scale-95 transition">クリア</button>
+                    </div>
+                </div>
+
+                <button id="complete-transaction-btn" onclick="processFinalPayment()" class="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-3 rounded-xl text-base shadow-lg shadow-emerald-500/20 transition">
+                    会計完了 (レシート発行)
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL 2: レシート表示・印刷モーダル -->
+    <div id="receipt-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-transparent max-w-sm w-full flex flex-col items-center">
+            <!-- レシート用紙エリア -->
+            <div id="printable-receipt" class="receipt-paper w-full p-6 text-slate-800 text-xs font-mono rounded-t-lg space-y-3">
+                <div class="text-center space-y-1 pb-3 border-b border-dashed border-slate-300">
+                    <h2 class="text-base font-bold font-sans tracking-wide">SmartPOS CAFE & STORE</h2>
+                    <p class="text-[10px] text-slate-500 font-sans">東京都千代田区丸の内 1-1-1</p>
+                    <p id="receipt-datetime" class="text-[10px] text-slate-400">2026/09/30 10:00</p>
+                </div>
+
+                <div class="flex justify-between text-[10px] text-slate-500 font-sans">
+                    <span>伝票No: <span id="receipt-txn-id">#0000</span></span>
+                    <span>担当: <span id="receipt-staff-name">レジ担当</span></span>
+                </div>
+
+                <!-- 商品購入明細 -->
+                <div id="receipt-items-list" class="space-y-1.5 py-2 border-b border-dashed border-slate-300">
+                    <!-- JSで動的描画 -->
+                </div>
+
+                <!-- 集計計算内訳 -->
+                <div class="space-y-1 text-slate-700 text-xs pt-1">
+                    <div class="flex justify-between">
+                        <span>小計 (税抜)</span>
+                        <span id="receipt-subtotal-val">¥0</span>
+                    </div>
+                    <div class="flex justify-between text-[11px] text-slate-500">
+                        <span>消費税</span>
+                        <span id="receipt-tax-val">¥0</span>
+                    </div>
+                    <div id="receipt-discount-row" class="hidden flex justify-between text-amber-600">
+                        <span>値引き</span>
+                        <span id="receipt-discount-val">-¥0</span>
+                    </div>
+                    <div class="flex justify-between font-bold text-sm text-slate-900 pt-1.5 border-t border-slate-300">
+                        <span>合計</span>
+                        <span id="receipt-total-val">¥0</span>
+                    </div>
+                    <div class="flex justify-between text-slate-500 pt-1">
+                        <span>お支払い方式</span>
+                        <span id="receipt-pay-method">現金</span>
+                    </div>
+                    <div class="flex justify-between text-slate-500">
+                        <span>お預かり</span>
+                        <span id="receipt-tendered-val">¥0</span>
+                    </div>
+                    <div class="flex justify-between text-slate-500">
+                        <span>お釣り</span>
+                        <span id="receipt-change-val">¥0</span>
+                    </div>
+                </div>
+
+                <div class="text-center pt-3 border-t border-dashed border-slate-300 text-[10px] text-slate-400 font-sans">
+                    <p>毎度ありがとうございます！</p>
+                    <p class="mt-0.5">またのご来店をお待ちしております。</p>
+                </div>
+            </div>
+
+            <!-- 操作ボタン (非印刷) -->
+            <div class="w-full mt-4 flex space-x-2 no-print">
+                <button onclick="window.print()" class="flex-1 bg-slate-800 hover:bg-slate-700 text-white font-bold py-2.5 rounded-xl text-xs transition flex items-center justify-center space-x-1.5 shadow">
+                    <i class="fa-solid fa-print"></i>
+                    <span>レシートを印刷</span>
+                </button>
+                <button onclick="closeReceiptModal()" class="flex-1 bg-brand-600 hover:bg-brand-700 text-white font-bold py-2.5 rounded-xl text-xs transition shadow">
+                    次のお会計へ
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL 3: 商品追加/編集モーダル -->
+    <div id="product-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl shadow-2xl max-w-md w-full overflow-hidden">
+            <div class="bg-slate-900 text-white p-4.5 flex items-center justify-between">
+                <h3 id="product-modal-title" class="font-bold text-sm">新規商品を登録</h3>
+                <button onclick="closeProductModal()" class="text-slate-400 hover:text-white text-lg">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <form id="product-form" onsubmit="handleProductFormSubmit(event)" class="p-5 space-y-3 text-xs">
+                <input type="hidden" id="product-edit-id">
+
+                <div>
+                    <label class="block font-bold text-slate-600 mb-1">商品名</label>
+                    <input type="text" id="prod-form-name" required placeholder="例: アイスカフェラテ" class="w-full px-3 py-2 bg-slate-100 rounded-xl border border-slate-200 focus:ring-2 focus:ring-brand-500 outline-none">
+                </div>
+
+                <div class="grid grid-cols-2 gap-2.5">
+                    <div>
+                        <label class="block font-bold text-slate-600 mb-1">価格 (税込/円)</label>
+                        <input type="number" id="prod-form-price" required min="0" placeholder="480" class="w-full px-3 py-2 bg-slate-100 rounded-xl border border-slate-200 focus:ring-2 focus:ring-brand-500 outline-none">
+                    </div>
+                    <div>
+                        <label class="block font-bold text-slate-600 mb-1">適用税率</label>
+                        <select id="prod-form-tax" class="w-full px-3 py-2 bg-slate-100 rounded-xl border border-slate-200 focus:ring-2 focus:ring-brand-500 outline-none">
+                            <option value="0.10">標準税率 10%</option>
+                            <option value="0.08">軽減税率 8%</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-2.5">
+                    <div>
+                        <label class="block font-bold text-slate-600 mb-1">カテゴリ</label>
+                        <select id="prod-form-category" class="w-full px-3 py-2 bg-slate-100 rounded-xl border border-slate-200 focus:ring-2 focus:ring-brand-500 outline-none">
+                            <option value="ドリンク">ドリンク</option>
+                            <option value="フード">フード</option>
+                            <option value="スイーツ">スイーツ</option>
+                            <option value="グッズ">グッズ</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block font-bold text-slate-600 mb-1">在庫数</label>
+                        <input type="number" id="prod-form-stock" required min="0" value="99" class="w-full px-3 py-2 bg-slate-100 rounded-xl border border-slate-200 focus:ring-2 focus:ring-brand-500 outline-none">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-2.5">
+                    <div>
+                        <label class="block font-bold text-slate-600 mb-1">アイコン (FontAwesome)</label>
+                        <input type="text" id="prod-form-icon" value="fa-mug-hot" placeholder="fa-coffee" class="w-full px-3 py-2 bg-slate-100 rounded-xl border border-slate-200 focus:ring-2 focus:ring-brand-500 outline-none">
+                    </div>
+                    <div>
+                        <label class="block font-bold text-slate-600 mb-1">カード色</label>
+                        <select id="prod-form-color" class="w-full px-3 py-2 bg-slate-100 rounded-xl border border-slate-200 focus:ring-2 focus:ring-brand-500 outline-none">
+                            <option value="brand">ブルー</option>
+                            <option value="emerald">グリーン</option>
+                            <option value="amber">オレンジ/アンバー</option>
+                            <option value="rose">レッド/ピンク</option>
+                            <option value="purple">パープル</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="pt-2 flex space-x-2">
+                    <button type="button" onclick="closeProductModal()" class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold py-2.5 rounded-xl transition">キャンセル</button>
+                    <button type="submit" class="flex-1 bg-brand-600 hover:bg-brand-700 text-white font-bold py-2.5 rounded-xl transition shadow">保存する</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL 4: Firebase カスタム設定モーダル -->
+    <div id="config-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl shadow-2xl max-w-lg w-full overflow-hidden">
+            <div class="bg-slate-900 text-white p-4.5 flex items-center justify-between">
+                <div class="flex items-center space-x-2">
+                    <i class="fa-solid fa-sliders text-brand-400"></i>
+                    <h3 class="font-bold text-sm">Firebase 接続設定 (独自環境用)</h3>
+                </div>
+                <button onclick="closeConfigModal()" class="text-slate-400 hover:text-white text-lg">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div class="p-5 space-y-3 text-xs">
+                <p class="text-slate-600 leading-relaxed">
+                    GitHub Pages等でご自身のFirebaseプロジェクトに接続する場合、Firebase Consoleから取得したJSON設定を以下に入力してください。
+                </p>
+                <div>
+                    <label class="block font-bold text-slate-700 mb-1">Firebase Config JSON</label>
+                    <textarea id="custom-firebase-json" rows="6" placeholder='{
+  "apiKey": "AIzaSy...",
+  "authDomain": "your-app.firebaseapp.com",
+  "projectId": "your-app",
+  "storageBucket": "your-app.appspot.com",
+  "messagingSenderId": "123456789",
+  "appId": "1:123456789:web:abcdef"
+}' class="w-full p-3 font-mono text-[11px] bg-slate-50 border border-slate-300 rounded-xl outline-none focus:ring-2 focus:ring-brand-500"></textarea>
+                </div>
+                <div class="pt-2 flex space-x-2">
+                    <button onclick="resetFirebaseConfig()" class="bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold px-4 py-2.5 rounded-xl transition">初期化</button>
+                    <button onclick="saveCustomFirebaseConfig()" class="flex-1 bg-brand-600 hover:bg-brand-700 text-white font-bold py-2.5 rounded-xl transition shadow">設定を適用して再接続</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- トースト通知コンテナ (alert()代替) -->
+    <div id="toast-container" class="fixed bottom-4 right-4 z-50 flex flex-col space-y-2 pointer-events-none"></div>
+
+    <!-- Firebase SDK & Application Logic (ES Module) -->
+    <script type="module">
+        import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { 
+            getFirestore, 
+            collection, 
+            doc, 
+            setDoc, 
+            addDoc, 
+            updateDoc, 
+            deleteDoc, 
+            onSnapshot, 
+            serverTimestamp 
+        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        const DEFAULT_PRODUCTS = [
+            { id: 'p1', name: 'ブレンドコーヒー (Hot/Ice)', price: 420, taxRate: 0.10, category: 'ドリンク', stock: 100, icon: 'fa-mug-hot', color: 'amber' },
+            { id: 'p2', name: 'カフェラテ', price: 480, taxRate: 0.10, category: 'ドリンク', stock: 85, icon: 'fa-coffee', color: 'brand' },
+            { id: 'p3', name: '抹茶フラッペ', price: 580, taxRate: 0.10, category: 'ドリンク', stock: 40, icon: 'fa-glass-water', color: 'emerald' },
+            { id: 'p4', name: '自家製アボカドサンド', price: 750, taxRate: 0.08, category: 'フード', stock: 20, icon: 'fa-bread-slice', color: 'emerald' },
+            { id: 'p5', name: 'ベイクドチーズケーキ', price: 520, taxRate: 0.08, category: 'スイーツ', stock: 15, icon: 'fa-cake-candles', color: 'rose' },
+            { id: 'p6', name: 'クラシックプリン', price: 450, taxRate: 0.08, category: 'スイーツ', stock: 25, icon: 'fa-custard', color: 'amber' },
+            { id: 'p7', name: 'オリジナルタンブラー', price: 2200, taxRate: 0.10, category: 'グッズ', stock: 10, icon: 'fa-bottle-water', color: 'purple' },
+        ];
+
+        window.appState = {
+            products: loadLocalData('pos_products', DEFAULT_PRODUCTS),
+            cart: [],
+            sales: loadLocalData('pos_sales', []),
+            selectedCategory: 'すべて',
+            paymentMethod: 'cash',
+            tenderedAmount: 0,
+            activeTab: 'pos',
+            appId: typeof __app_id !== 'undefined' ? __app_id : 'smart-pos-app',
+            db: null,
+            useFirestore: false
+        };
+
+        function saveLocalData(key, data) {
+            try {
+                localStorage.setItem(key, JSON.stringify(data));
+            } catch(e) {
+                console.warn('LocalStorage save error:', e);
+            }
+        }
+
+        function loadLocalData(key, fallback) {
+            try {
+                const item = localStorage.getItem(key);
+                return item ? JSON.parse(item) : fallback;
+            } catch(e) {
+                return fallback;
+            }
+        }
+
+        async function initApp() {
+            const savedConfig = localStorage.getItem('pos_custom_firebase_config');
+            if (savedConfig) {
+                try {
+                    const config = JSON.parse(savedConfig);
+                    const app = getApps().length === 0 ? initializeApp(config) : getApp();
+                    window.appState.db = getFirestore(app);
+                    window.appState.useFirestore = true;
+                    subscribeFirestoreCollections();
+                    document.getElementById('sync-status-badge').className = "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-[10px] px-2 py-0.5 rounded-full font-medium flex items-center gap-1";
+                    document.getElementById('sync-status-text').innerText = "クラウド同期中";
+                } catch(e) {
+                    console.warn("Firestore config error, falling back to LocalStorage:", e);
+                    setLocalOnlyMode();
+                }
+            } else {
+                setLocalOnlyMode();
+            }
+
+            renderAllViews();
+        }
+
+        function setLocalOnlyMode() {
+            window.appState.useFirestore = false;
+            document.getElementById('sync-status-badge').className = "bg-slate-700 text-slate-300 border border-slate-600 text-[10px] px-2 py-0.5 rounded-full font-medium flex items-center gap-1";
+            document.getElementById('sync-status-text').innerText = "ローカル保存 (認証不要)";
+        }
+
+        function subscribeFirestoreCollections() {
+            if (!window.appState.db || !window.appState.useFirestore) return;
+
+            const appId = window.appState.appId;
+            const productsRef = collection(window.appState.db, 'artifacts', appId, 'public', 'data', 'products');
+            const salesRef = collection(window.appState.db, 'artifacts', appId, 'public', 'data', 'sales');
+
+            onSnapshot(productsRef, (snapshot) => {
+                if (!snapshot.empty) {
+                    window.appState.products = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    saveLocalData('pos_products', window.appState.products);
+                }
+                renderAllViews();
+            }, (err) => console.warn("Firestore products snapshot error:", err));
+
+            onSnapshot(salesRef, (snapshot) => {
+                window.appState.sales = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                window.appState.sales.sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
+                saveLocalData('pos_sales', window.appState.sales);
+                renderSalesView();
+            }, (err) => console.warn("Firestore sales snapshot error:", err));
+        }
+
+        window.addQuickMoney = function(amount) {
+            window.appState.tenderedAmount += amount;
+            updateNumpadDisplay();
+        };
+
+        window.pressNumpad = function(key) {
+            let currentStr = window.appState.tenderedAmount.toString();
+            if (key === 'CLR') {
+                currentStr = '0';
+            } else if (key === '00') {
+                if (currentStr !== '0') currentStr += '00';
+            } else {
+                if (currentStr === '0') currentStr = key;
+                else currentStr += key;
+            }
+            window.appState.tenderedAmount = parseInt(currentStr, 10) || 0;
+            updateNumpadDisplay();
+        };
+
+        window.setExactTendered = function() {
+            const totals = updateCartTotals();
+            window.appState.tenderedAmount = totals.finalTotal;
+            updateNumpadDisplay();
+        };
+
+        function updateNumpadDisplay() {
+            const totals = updateCartTotals();
+            document.getElementById('modal-tendered-amount').value = window.appState.tenderedAmount.toLocaleString();
+            const change = Math.max(0, window.appState.tenderedAmount - totals.finalTotal);
+            document.getElementById('modal-change-amount').innerText = `¥${change.toLocaleString()}`;
+        }
+
+        window.processFinalPayment = async function() {
+            const totals = updateCartTotals();
+            if (window.appState.paymentMethod === 'cash' && window.appState.tenderedAmount < totals.finalTotal) {
+                showToast('お預かり金額が不足しています', 'error');
+                return;
+            }
+
+            const txnId = 'TX' + Date.now().toString().slice(-6);
+            const now = new Date();
+
+            const saleData = {
+                txnId: txnId,
+                timestamp: { seconds: Math.floor(now.getTime() / 1000) },
+                createdAtFormatted: now.toLocaleString('ja-JP'),
+                items: window.appState.cart.map(i => ({
+                    id: i.product.id,
+                    name: i.product.name,
+                    price: i.product.price,
+                    quantity: i.quantity,
+                    taxRate: i.product.taxRate || 0.10
+                })),
+                subtotal: totals.subtotal,
+                tax: totals.totalTax,
+                discount: totals.discountAmount,
+                total: totals.finalTotal,
+                paymentMethod: window.appState.paymentMethod,
+                tendered: window.appState.paymentMethod === 'cash' ? window.appState.tenderedAmount : totals.finalTotal,
+                change: window.appState.paymentMethod === 'cash' ? Math.max(0, window.appState.tenderedAmount - totals.finalTotal) : 0,
+                staff: 'レジ担当'
+            };
+
+            // LocalStorageに直ちに保存
+            window.appState.sales.unshift(saleData);
+            saveLocalData('pos_sales', window.appState.sales);
+
+            // 在庫数変更を適用
+            window.appState.cart.forEach(cartItem => {
+                const prod = window.appState.products.find(p => p.id === cartItem.product.id);
+                if (prod) {
+                    prod.stock = Math.max(0, prod.stock - cartItem.quantity);
+                }
+            });
+            saveLocalData('pos_products', window.appState.products);
+
+            // Firestore設定がある場合は同期
+            if (window.appState.useFirestore && window.appState.db) {
+                try {
+                    const appId = window.appState.appId;
+                    await addDoc(collection(window.appState.db, 'artifacts', appId, 'public', 'data', 'sales'), {
+                        ...saleData,
+                        timestamp: serverTimestamp()
+                    });
+                } catch(e) { console.warn("Firestore sync error:", e); }
+            }
+
+            closeCheckoutModal();
+            showReceiptModal(saleData);
+            clearCart();
+            renderAllViews();
+            showToast('決済が完了しました！', 'success');
+        };
+
+        window.clearSalesData = function() {
+            if (!confirm('全ての売上履歴をクリアしますか？')) return;
+            window.appState.sales = [];
+            saveLocalData('pos_sales', []);
+            renderSalesView();
+            showToast('売上履歴をリセットしました', 'info');
+        };
+
+        // 初期ロード完了後に呼び出し
+        window.addEventListener('DOMContentLoaded', () => {
+            initApp();
+        });
+    </script>
+</body>
+</html>
